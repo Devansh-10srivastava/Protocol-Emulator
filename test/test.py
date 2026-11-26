@@ -6,35 +6,36 @@ from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles
 
 
-@cocotb.test()
-async def test_project(dut):
-    dut._log.info("Start")
-
-    # Set the clock period to 10 us (100 KHz)
-    clock = Clock(dut.clk, 10, unit="us")
-    cocotb.start_soon(clock.start())
-
-    # Reset
-    dut._log.info("Reset")
+async def reset(dut):
     dut.ena.value = 1
     dut.ui_in.value = 0
     dut.uio_in.value = 0
     dut.rst_n.value = 0
     await ClockCycles(dut.clk, 10)
+
+
+@cocotb.test()
+async def test_counter(dut):
+    """Counter resets to 0, increments by 1 per clock, wraps at 256."""
+    clock = Clock(dut.clk, 10, unit="us")
+    cocotb.start_soon(clock.start())
+
+    await reset(dut)
+    assert int(dut.uo_out.value) == 0, "counter must be 0 while in reset"
+    assert int(dut.uio_oe.value) == 0, "bidirectional pins must be inputs"
+
     dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 2)
+    start = int(dut.uo_out.value)
 
-    dut._log.info("Test project behavior")
+    # Counts exactly once per clock
+    await ClockCycles(dut.clk, 10)
+    assert int(dut.uo_out.value) == (start + 10) % 256
 
-    # Set the input values you want to test
-    dut.ui_in.value = 20
-    dut.uio_in.value = 30
+    # Wraps around after 256 clocks
+    await ClockCycles(dut.clk, 256)
+    assert int(dut.uo_out.value) == (start + 10) % 256
 
-    # Wait for one clock cycle to see the output values
-    await ClockCycles(dut.clk, 1)
-
-    # The following assersion is just an example of how to check the output values.
-    # Change it to match the actual expected output of your module:
-    assert dut.uo_out.value == 50
-
-    # Keep testing the module by changing the input values, waiting for
-    # one or more clock cycles, and asserting the expected output values.
+    # Reset again mid-count returns to 0
+    await reset(dut)
+    assert int(dut.uo_out.value) == 0
