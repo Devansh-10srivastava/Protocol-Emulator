@@ -21,22 +21,23 @@ module tt_um_devansh10_protoemu (
     input  wire       rst_n     // reset_n - low to reset
 );
 
-  reg [7:0] count;
+  reg [31:0] count;
+  reg [31:0] product;
 
-  // Synchronous active-low reset: flops do NOT power up at 0 on silicon,
-  // so every state register must be reset explicitly.
   always @(posedge clk) begin
-    if (!rst_n)
-      count <= 8'd0;
-    else if (ena)
-      count <= count + 8'd1;
+    if (!rst_n) begin
+      count   <= 32'd0;
+      product <= 32'd0;
+    end else if (ena) begin
+      count   <= count + 32'd1;
+      product <= count * {ui_in, uio_in, ui_in, uio_in};  // 32x32 multiply: deliberately slow
+    end
   end
 
-  assign uo_out  = count;
+  assign uo_out  = product[31:24] ^ count[7:0];
   assign uio_out = 8'd0;
-  assign uio_oe  = 8'd0;   // all bidirectional pins are inputs for now
+  assign uio_oe  = 8'd0;
 
-  // Unused inputs, listed to silence lint warnings
-  wire _unused = &{ui_in, uio_in, 1'b0};
+
 
 endmodule
